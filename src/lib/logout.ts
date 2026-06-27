@@ -1,25 +1,16 @@
 import { api } from "@/lib/api";
+import { clearAuthData, getToken } from "@/lib/auth";
 
-export async function logout() {
+export async function logout(): Promise<void> {
+  const token = getToken();
+
   try {
-    const token = localStorage.getItem("token");
-
-    if (!token) return;
-
-    await api.post("/api/logout", null, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    if (token) {
+      await api.post("/api/logout");
+    }
   } catch (error) {
     console.error("Error cerrando sesión:", error);
+  } finally {
+    clearAuthData();
   }
 }
-document.cookie.split(";").forEach(function (c) {
-  document.cookie = c
-    .replace(/^ +/, "")
-    .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
-});
