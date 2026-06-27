@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import axios from "axios";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -11,18 +13,79 @@ import { api } from "@/lib/api";
 import { PaginatedResponse } from "@/types/api";
 import { Donacion } from "@/types/donacion";
 
+function getAxiosErrorMessage(error: unknown, fallback: string) {
+  if (!axios.isAxiosError(error)) return fallback;
+
+  const data = error.response?.data as
+    | { message?: string; error?: string; errors?: Record<string, string[]> }
+    | undefined;
+
+  if (data?.message) return data.message;
+  if (data?.error) return data.error;
+
+  const firstValidationMessage = data?.errors
+    ? Object.values(data.errors).flat()[0]
+    : null;
+
+  return firstValidationMessage || fallback;
+}
+
 export default function DonacionesPage() {
   const [donaciones, setDonaciones] = useState<Donacion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeletingId, setIsDeletingId] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  const loadDonaciones = async () => {
+    setIsLoading(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await api.get<PaginatedResponse<Donacion>>("/api/donaciones");
+      setDonaciones(response.data.data);
+    } catch {
+      setError("No fue posible cargar las donaciones.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    api
-      .get<PaginatedResponse<Donacion>>("/api/donaciones")
-      .then((response) => setDonaciones(response.data.data))
-      .catch(() => setError("No fue posible cargar las donaciones."))
-      .finally(() => setIsLoading(false));
+    loadDonaciones();
   }, []);
+
+  const handleDelete = async (donacion: Donacion) => {
+    const confirmed = window.confirm(
+      `¿Seguro que deseas eliminar la donación de "${donacion.donante}"? Esta acción puede afectar el inventario.`
+    );
+
+    if (!confirmed) return;
+
+    setIsDeletingId(donacion.id);
+    setError("");
+    setMessage("");
+
+    try {
+      await api.delete(`/api/donaciones/${donacion.id}`);
+
+      setDonaciones((current) =>
+        current.filter((item) => item.id !== donacion.id)
+      );
+
+      setMessage("Donación eliminada correctamente.");
+    } catch (deleteError: unknown) {
+      setError(
+        getAxiosErrorMessage(
+          deleteError,
+          "No fue posible eliminar la donación."
+        )
+      );
+    } finally {
+      setIsDeletingId(null);
+    }
+  };
 
   return (
     <AppShell>
@@ -30,12 +93,21 @@ export default function DonacionesPage() {
         title="Donaciones"
         description="Registro de donaciones recibidas y control de sus ítems."
         action={
-          <button className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 sm:w-auto">
+          <Link
+            href="/donaciones/nueva"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 sm:w-auto"
+          >
             <Plus className="h-4 w-4" />
             Nueva donación
-          </button>
+          </Link>
         }
       />
+
+      {message && (
+        <p className="mb-4 rounded-xl bg-green-50 p-3 text-sm font-medium text-green-700">
+          {message}
+        </p>
+      )}
 
       {isLoading && <LoadingState />}
       {error && <ErrorState message={error} />}
@@ -93,6 +165,26 @@ export default function DonacionesPage() {
                     </dd>
                   </div>
                 </dl>
+
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <Link
+                    href={`/donaciones/${donacion.id}/editar`}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Editar
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(donacion)}
+                    disabled={isDeletingId === donacion.id}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {isDeletingId === donacion.id ? "Eliminando..." : "Eliminar"}
+                  </button>
+                </div>
               </article>
             ))}
           </div>
@@ -117,6 +209,9 @@ export default function DonacionesPage() {
                     <th className="px-4 py-3 text-right font-semibold text-slate-600">
                       Ítems
                     </th>
+                    <th className="px-4 py-3 text-right font-semibold text-slate-600">
+                      Acciones
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -136,6 +231,29 @@ export default function DonacionesPage() {
                       </td>
                       <td className="px-4 py-3 text-right font-semibold text-slate-900">
                         {donacion.items_count ?? 0}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-2">
+                          <Link
+                            href={`/donaciones/${donacion.id}/editar`}
+                            className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+                          >
+                            <Pencil className="h-4 w-4" />
+                            Editar
+                          </Link>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(donacion)}
+                            disabled={isDeletingId === donacion.id}
+                            className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            {isDeletingId === donacion.id
+                              ? "Eliminando..."
+                              : "Eliminar"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

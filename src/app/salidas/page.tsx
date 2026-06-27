@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
@@ -30,10 +31,13 @@ export default function SalidasPage() {
         title="Salidas"
         description="Control de salidas, entregas o despachos de medicamentos."
         action={
-          <button className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 sm:w-auto">
+          <Link
+            href="/salidas/nueva"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 sm:w-auto"
+          >
             <Plus className="h-4 w-4" />
             Nueva salida
-          </button>
+          </Link>
         }
       />
 

@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import axios from "axios";
+import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -15,11 +17,14 @@ export default function MedicamentosPage() {
   const [medicamentos, setMedicamentos] = useState<Medicamento[]>([]);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeletingId, setIsDeletingId] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
   const loadMedicamentos = async (query = "") => {
     setIsLoading(true);
     setError("");
+    setMessage("");
 
     try {
       const response = await api.get<PaginatedResponse<Medicamento>>(
@@ -46,16 +51,52 @@ export default function MedicamentosPage() {
     loadMedicamentos(search);
   };
 
+  const handleDelete = async (medicamento: Medicamento) => {
+    const confirmed = window.confirm(
+      `¿Seguro que deseas eliminar el medicamento "${medicamento.nombre}"? Esta acción no se puede deshacer.`
+    );
+
+    if (!confirmed) return;
+
+    setIsDeletingId(medicamento.id);
+    setMessage("");
+    setError("");
+
+    try {
+      await api.delete(`/api/medicamentos/${medicamento.id}`);
+
+      setMedicamentos((current) =>
+        current.filter((item) => item.id !== medicamento.id)
+      );
+
+      setMessage("Medicamento eliminado correctamente.");
+    } catch (deleteError: unknown) {
+      if (axios.isAxiosError(deleteError)) {
+        setError(
+          deleteError.response?.data?.message ||
+            "No fue posible eliminar el medicamento."
+        );
+      } else {
+        setError("Error inesperado al eliminar el medicamento.");
+      }
+    } finally {
+      setIsDeletingId(null);
+    }
+  };
+
   return (
     <AppShell>
       <PageHeader
         title="Medicamentos"
         description="Catálogo principal de medicamentos registrados en el sistema."
         action={
-          <button className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 sm:w-auto">
+          <Link
+            href="/medicamentos/nuevo"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 sm:w-auto"
+          >
             <Plus className="h-4 w-4" />
             Nuevo medicamento
-          </button>
+          </Link>
         }
       />
 
@@ -82,6 +123,12 @@ export default function MedicamentosPage() {
         </button>
       </form>
 
+      {message && (
+        <p className="mb-4 rounded-xl bg-green-50 p-3 text-sm font-medium text-green-700">
+          {message}
+        </p>
+      )}
+
       {isLoading && <LoadingState />}
       {error && <ErrorState message={error} />}
 
@@ -94,7 +141,6 @@ export default function MedicamentosPage() {
 
       {!isLoading && !error && medicamentos.length > 0 && (
         <>
-          {/* Vista móvil: tarjetas */}
           <div className="space-y-3 md:hidden">
             {medicamentos.map((medicamento) => (
               <article
@@ -139,11 +185,30 @@ export default function MedicamentosPage() {
                     </dd>
                   </div>
                 </dl>
+
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <Link
+                    href={`/medicamentos/${medicamento.id}/editar`}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Editar
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(medicamento)}
+                    disabled={isDeletingId === medicamento.id}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {isDeletingId === medicamento.id ? "Eliminando..." : "Eliminar"}
+                  </button>
+                </div>
               </article>
             ))}
           </div>
 
-          {/* Vista tablet/desktop: tabla */}
           <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:block">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -164,6 +229,9 @@ export default function MedicamentosPage() {
                     <th className="px-4 py-3 text-right font-semibold text-slate-600">
                       Stock
                     </th>
+                    <th className="px-4 py-3 text-right font-semibold text-slate-600">
+                      Acciones
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -183,6 +251,29 @@ export default function MedicamentosPage() {
                       </td>
                       <td className="px-4 py-3 text-right font-semibold text-slate-900">
                         {medicamento.stock ?? 0}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-2">
+                          <Link
+                            href={`/medicamentos/${medicamento.id}/editar`}
+                            className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+                          >
+                            <Pencil className="h-4 w-4" />
+                            Editar
+                          </Link>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(medicamento)}
+                            disabled={isDeletingId === medicamento.id}
+                            className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            {isDeletingId === medicamento.id
+                              ? "Eliminando..."
+                              : "Eliminar"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
